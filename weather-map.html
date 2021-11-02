@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Weather Map</title>
+    <link href='https://api.mapbox.com/mapbox-gl-js/v2.4.1/mapbox-gl.css' rel='stylesheet' />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/css/bootstrap.min.css" integrity="sha384-B0vP5xmATw1+K9KRQjQERJvTumQW0nPEzvF6L/Z6nronJ3oUOFUFpCjEUQouq2+l" crossorigin="anonymous">
+    <style>
+        .everything-container{
+            height: 100vh;
+        }
+        #map{
+            height: 100%;
+            border-radius: 10px;
+            box-shadow: 2px 2px 5px #000000;
+        }
+    </style>
+</head>
+<body>
+
+
+<nav class="navbar navbar-light bg-primary justify-content-between mb-3">
+    <a class="navbar-brand">Weather Map</a>
+    <ul class="navbar-nav ml-auto">
+        <li class="nav-item">
+            <a>Current Location: <span id="current-city">Dallas, TX</span></a>
+        </li>
+    </ul>
+</nav>
+
+<div class="container-fluid">
+    <div class="no-gutters everything-container">
+        <form class="form-inline">
+            <span class="m-sm-2">Place</span>
+            <input class="form-control mr-sm-2" id="search-bar" type="search" placeholder="Example: City, State" aria-label="Search">
+            <button class="btn btn-primary my-2 my-sm-0" id="search-btn" type="submit">Search</button>
+        </form>
+
+        <br>
+
+        <div class="container">
+            <div class="row justify-content-center" id="weather-cards"></div>
+        </div>
+
+        <div class="" id="map"></div>
+    </div>
+</div>
+
+<script src='https://api.mapbox.com/mapbox-gl-js/v2.4.1/mapbox-gl.js'></script>
+<script src="js/jquery-3.6.0.min.js"></script>
+<script src="js/geocode-mapbox-utils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/js/bootstrap.bundle.min.js" integrity="sha384-Piv4xVNRyMGpqkS2by6br4gNJ7DXjqk09RmUpJ8jgGtD7zP9yug3goQfGII0yAns" crossorigin="anonymous"></script>
+<script src="js/keys.js"></script>
+<script>
+    "use strict";
+
+    mapboxgl.accessToken = MAPBOX_API_TOKEN_PERSONAL;
+    var map = new mapboxgl.Map({
+        container: 'map', // container ID
+        style: 'mapbox://styles/mapbox/streets-v11', // style URL
+        center: [-96.7970, 32.7767], // starting position [lng, lat]
+        zoom: 12 // starting zoom
+    });
+
+    var globalMarker = new mapboxgl.Marker({draggable: true})
+        .setLngLat([-96.7970, 32.7767])
+        .addTo(map);
+
+    function getRequest (lon, lat) {
+        $.get("http://api.openweathermap.org/data/2.5/onecall", {
+            appid: OPEN_WEATHER_API_KEY,
+            lat: lat,
+            lon: lon,
+            units: 'imperial',
+        }).done(function (data) {
+
+            $("#weather-cards").html("");
+            data.daily.forEach(function (dailyWeather, index) {
+                var dayOfWeek = new Date(dailyWeather.sunrise * 1000);
+                var displayDay = (new Intl.DateTimeFormat('en-US', {weekday: 'long'}).format(dayOfWeek));
+
+                if (index > 4) {
+                    return;
+                }
+
+                $("#weather-cards").append('<article class="card col-2 bg-light m-3">' + '<div>' +
+                    '<div class="card-header">' + displayDay + '</div>' +
+                    '<div class="card-body">' +
+                    '<p class="card-text">' + '<img src="http://openweathermap.org/img/wn/' + dailyWeather.weather[0].icon + '@2x.png"/>' + '</p>' +
+                    '<p class="card-text">' + dailyWeather.temp.min + "°F" + " - " + dailyWeather.temp.max + "°F" + '</p>' +
+                    '</div>' +
+                    '<ul class="list-group list-group-flush">' +
+                    '<li class="list-group-item">Description: <span class="description"><strong>' + dailyWeather.weather[0].description + '</strong></span></li>' +
+                    '<li class="list-group-item">Humidity: <span class="humidity"><strong>' + dailyWeather.humidity + '</strong></span></li>' +
+                    '<li class="list-group-item">Wind: <span class="wind"><strong>' + windCardinalDirection(dailyWeather.wind_deg) + '</strong></span></li>' +
+                    '<li class="list-group-item">Pressure: <span class="pressure"><strong>' + dailyWeather.pressure + '</strong></span></li>' +
+                    '</ul>' +
+                    '</div>' + '</article>');
+            });
+        });
+    }
+
+    globalMarker.on("dragend", function (){
+        var newCoordinates = globalMarker.getLngLat();
+        $("article").remove();
+        getRequest(newCoordinates.lng, newCoordinates.lat);
+        $("#current-city").html(newCoordinates.lng + ", " + newCoordinates.lat)
+    });
+
+
+    $("#search-btn").on("click", function (e){
+        e.preventDefault();
+        geocode($("#search-bar").val(), MAPBOX_API_TOKEN_PERSONAL).then(function(result){
+            map.setCenter(result);
+            globalMarker.setLngLat(result);
+
+            $("#current-city").html($("#search-bar").val())
+
+            getRequest(result[0], result[1]);
+        });
+    });
+
+    function windCardinalDirection(degrees){
+        let cardinalDirection = '';
+        if ((degrees > 348.75 && degrees <= 360) || (degrees >=0 && degrees <= 11.25)){
+            cardinalDirection = "N";
+        } else if (degrees > 11.25 && degrees  <= 33.75) {
+            cardinalDirection = "NNE";
+        } else if (degrees > 33.75 && degrees <= 56.25) {
+            cardinalDirection = "NE";
+        } else if (degrees > 56.25 && degrees <= 78.75) {
+            cardinalDirection = "ENE";
+        } else if (degrees > 78.75 && degrees <= 101.25) {
+            cardinalDirection = "E";
+        } else if (degrees > 101.25 && degrees <= 123.75) {
+            cardinalDirection = "ESE";
+        } else if (degrees > 123.75 && degrees <= 146.25) {
+            cardinalDirection = "SE";
+        } else if (degrees > 146.25 && degrees <= 168.75) {
+            cardinalDirection = "SSE";
+        } else if (degrees > 168.75 && degrees <= 191.25) {
+            cardinalDirection = "S";
+        } else  if (degrees > 191.25 && degrees <= 213.75) {
+            cardinalDirection = "SSW";
+        } else if (degrees > 213.75 && degrees <= 236.25)  {
+            cardinalDirection = "SW";
+        } else if (degrees > 236.25 && degrees <= 258.75) {
+            cardinalDirection = "WSW";
+        } else if (degrees > 258.75 && degrees <= 281.25) {
+            cardinalDirection = "W";
+        } else if (degrees > 281.25 && degrees <= 303.75) {
+            cardinalDirection = "WNW";
+        } else if (degrees > 303.75 && degrees <= 326.25) {
+            cardinalDirection = "NW";
+        } else if (degrees > 326.75 && degrees <= 348.75) {
+            cardinalDirection = "NNW";
+        }
+        return cardinalDirection;
+    }
+
+    getRequest(-96.7970, 32.7767);
+
+</script>
+</body>
+</html>
